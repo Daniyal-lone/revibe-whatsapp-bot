@@ -1,4 +1,5 @@
 import { query, withTransaction } from './db.js';
+import { normalizePhoneForIndia } from './phone.js';
 import { generateReceiptImage } from './receipt.js';
 import { sendWhatsAppImage, sendWhatsAppText } from './whatsapp.js';
 
@@ -17,8 +18,8 @@ export async function processReceiptQueue(limit = 10) {
       r.id,
       r.receipt_number,
       r.retry_count,
-      c.name AS customer_name,
-      c.phone,
+      COALESCE(t.customer_name_snapshot, c.name) AS customer_name,
+      COALESCE(t.customer_phone_snapshot, c.phone) AS phone,
       t.transaction_date,
       t.amount_paid,
       t.payment_method,
@@ -177,7 +178,7 @@ export async function processMarketingQueue(limit = 10) {
 }
 
 export async function createVisit(payload, actorRole = 'staff') {
-  const cleanPhone = String(payload.phone || '').replace(/[^\d+]/g, '');
+  const cleanPhone = normalizePhoneForIndia(payload.phone);
   if (!payload.name || !cleanPhone || !payload.staffId || !payload.serviceId || payload.amountPaid === '') {
     const error = new Error('Customer name, phone, staff, service, and amount are required.');
     error.status = 400;
@@ -206,17 +207,21 @@ export async function createVisit(payload, actorRole = 'staff') {
       `
       INSERT INTO transactions (
         customer_id,
+        customer_name_snapshot,
+        customer_phone_snapshot,
         staff_id,
         service_id,
         amount_paid,
         payment_method,
         transaction_date
       )
-      VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW()))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()))
       RETURNING *
       `,
       [
         customer.id,
+        payload.name.trim(),
+        cleanPhone,
         payload.staffId,
         payload.serviceId,
         Number(payload.amountPaid),

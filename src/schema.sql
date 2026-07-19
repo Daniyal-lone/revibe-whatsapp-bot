@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   transaction_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   customer_id UUID NOT NULL REFERENCES customers(id),
+  customer_name_snapshot TEXT,
+  customer_phone_snapshot TEXT,
   staff_id UUID NOT NULL REFERENCES staff(id),
   service_id UUID NOT NULL REFERENCES services(id),
   amount_paid NUMERIC(10, 2) NOT NULL CHECK (amount_paid >= 0),
@@ -160,3 +162,17 @@ CREATE INDEX IF NOT EXISTS idx_transactions_staff_date ON transactions(staff_id,
 CREATE INDEX IF NOT EXISTS idx_receipts_status ON receipts(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_marketing_status ON marketing_messages(status, due_date);
 CREATE INDEX IF NOT EXISTS idx_webhook_status_retry ON webhook_events(status, next_retry_at);
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS customer_name_snapshot TEXT;
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS customer_phone_snapshot TEXT;
+
+UPDATE transactions t
+SET
+  customer_name_snapshot = COALESCE(t.customer_name_snapshot, c.name),
+  customer_phone_snapshot = COALESCE(t.customer_phone_snapshot, c.phone)
+FROM customers c
+WHERE c.id = t.customer_id
+  AND (t.customer_name_snapshot IS NULL OR t.customer_phone_snapshot IS NULL);

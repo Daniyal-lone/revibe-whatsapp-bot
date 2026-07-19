@@ -112,8 +112,8 @@ app.get('/api/owner/dashboard', requireRole('owner'), async (_req, res, next) =>
         SELECT
           t.id,
           t.transaction_date,
-          c.name AS customer_name,
-          c.phone,
+          COALESCE(t.customer_name_snapshot, c.name) AS customer_name,
+          COALESCE(t.customer_phone_snapshot, c.phone) AS phone,
           st.name AS staff_name,
           s.name AS service_name,
           t.amount_paid,
