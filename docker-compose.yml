@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: revibe
+      POSTGRES_PASSWORD: revibe_password
+      POSTGRES_DB: revibe_salon
+    ports:
+      - "5432:5432"
+    volumes:
+      - revibe_postgres:/var/lib/postgresql/data
+
+volumes:
+  revibe_postgres:

@@ -1,0 +1,131 @@
+import 'dotenv/config';
+import { pool } from './db.js';
+
+await pool.query(`
+  INSERT INTO staff (name, role) VALUES
+    ('Harman', 'Salon Staff'),
+    ('Narvail', 'Salon Staff'),
+    ('Sameer', 'Salon Staff'),
+    ('Komal', 'Salon Staff'),
+    ('Zoya', 'Salon Staff')
+  ON CONFLICT (name, role) DO UPDATE SET is_active = TRUE;
+
+  INSERT INTO business_settings (
+    salon_name,
+    address_line_1,
+    address_line_2,
+    public_phone,
+    email,
+    whatsapp_business_number
+  )
+  VALUES (
+    'REVIBE UNISEX SALOON',
+    'Janbazpora Baramulla',
+    'Kashmir, 193101',
+    '+91 9596043901',
+    'revibe.unisexsalon@gmail.com',
+    '+91 97975 50647'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    salon_name = EXCLUDED.salon_name,
+    address_line_1 = EXCLUDED.address_line_1,
+    address_line_2 = EXCLUDED.address_line_2,
+    public_phone = EXCLUDED.public_phone,
+    email = EXCLUDED.email,
+    whatsapp_business_number = EXCLUDED.whatsapp_business_number,
+    updated_at = NOW();
+
+  INSERT INTO services (name, category, price) VALUES
+    ('Ladies Haircut', 'Hair Style', 150),
+    ('Head Wash', 'Hair Style', 150),
+    ('Head Wash+Haircut', 'Hair Style', 150),
+    ('SP Wash', 'Hair Style', 150),
+    ('GK Wash', 'Hair Style', 150),
+    ('Loreal Hair Spa', 'Hair Style', 150),
+    ('SP Hair Spa', 'Hair Style', 150),
+    ('Fiber Plex', 'Hair Style', 150),
+    ('Global Hair Colour', 'Hair Style', 150),
+    ('Majirel Global Hair Colour', 'Hair Style', 150),
+    ('Inoa Global Hair Colour', 'Hair Style', 150),
+    ('Majirel Touchup', 'Hair Style', 150),
+    ('Inoa Touchup', 'Hair Style', 150),
+    ('Smoothing', 'Hair Style', 150),
+    ('Highlights per streak', 'Hair Style', 150),
+    ('Blow Dry', 'Hair Style', 150),
+    ('D. Cutting', 'Hair Style', 150),
+    ('Curts', 'Hair Style', 150),
+    ('Crimping', 'Hair Style', 150),
+    ('Hair Do', 'Hair Style', 150),
+    ('Head massage', 'Hair Style', 150),
+    ('Badam Rogan Head Massage', 'Hair Style', 150),
+    ('Face Wax', 'Wax', 50),
+    ('Full Arm', 'Wax', 50),
+    ('Full Leg', 'Wax', 50),
+    ('Full Body', 'Wax', 50),
+    ('B. Wax', 'Wax', 50),
+    ('B. Wax Brizzlian', 'Wax', 50),
+    ('Face Oxy', 'Bleach', 50),
+    ('Face Cheryl', 'Bleach', 50),
+    ('Legs Bleach Both', 'Bleach', 50),
+    ('Arms Bleach', 'Bleach', 50),
+    ('Body Bleach', 'Bleach', 50),
+    ('Back Bleach', 'Bleach', 50),
+    ('Full Front', 'Bleach', 50),
+    ('Hair Cut', 'Men''s Hair Style', 150),
+    ('Shampoo', 'Men''s Hair Style', 150),
+    ('Trimming', 'Men''s Hair Style', 150),
+    ('Beard/Shave/Trim', 'Men''s Hair Style', 50),
+    ('Baby Haircut', 'Men''s Hair Style', 150),
+    ('Hair Styling', 'Men''s Hair Style', 150),
+    ('Head Massage', 'Men''s Hair Style', 150),
+    ('Loreal Hair Spa', 'Men''s Hair Style', 150),
+    ('Loreal Power Dose Spa', 'Men''s Hair Style', 150),
+    ('Ola Plex', 'Men''s Hair Style', 150),
+    ('Gypsy Spa', 'Men''s Hair Style', 150),
+    ('Inoa Touchup', 'Men''s Colour', 150),
+    ('Majirel Touchup', 'Men''s Colour', 150),
+    ('Beard Colour', 'Men''s Colour', 150),
+    ('Smoothing', 'Men''s Colour', 150),
+    ('Keratine', 'Men''s Colour', 150),
+    ('Highlights', 'Men''s Colour', 150),
+    ('Hair Botox', 'Men''s Colour', 150),
+    ('Oxy Bleach', 'Face Bleach', 50),
+    ('Cheryl Bleach', 'Face Bleach', 50),
+    ('O3+ D. Tan', 'Face Bleach', 50),
+    ('Face D. Tan', 'D.Tan', 50),
+    ('Body D. Tan', 'D.Tan', 50),
+    ('Back D. Tan', 'D.Tan', 50),
+    ('Front D. Tan', 'D.Tan', 50),
+    ('O3+ Whitening', 'Facial', 150),
+    ('O3+ Swead', 'Facial', 150),
+    ('Kanpeki Hydra', 'Facial', 150),
+    ('Casmara', 'Facial', 150),
+    ('Lotus', 'Facial', 150),
+    ('Cheryl', 'Facial', 150),
+    ('Vitamin - C', 'Facial', 150),
+    ('Threading', 'Threading', 50),
+    ('Face wax', 'Threading', 50),
+    ('Face Thread', 'Threading', 50),
+    ('Lotus', 'Body', 50),
+    ('O3+', 'Body', 50),
+    ('Kanpeki', 'Body', 50),
+    ('Cheryl', 'Body', 50),
+    ('Lotus Pedicure', 'Pedicure Manicure', 50),
+    ('Pedipire Pedicure', 'Pedicure Manicure', 50),
+    ('Alga Pedicure', 'Pedicure Manicure', 50),
+    ('Alga Manicure', 'Pedicure Manicure', 50),
+    ('Nail Filling', 'Pedicure Manicure', 50),
+    ('Nail Paint', 'Pedicure Manicure', 50),
+    ('Lotus', 'Clean Up', 50),
+    ('O3+', 'Clean Up', 50),
+    ('Kanpeki', 'Clean Up', 50),
+    ('Cheryl', 'Clean Up', 50),
+    ('Upperlip', 'Threading', 50),
+    ('Forehead', 'Threading', 50)
+  ON CONFLICT (name, category) DO UPDATE SET
+    price = EXCLUDED.price,
+    is_active = TRUE;
+`);
+
+await pool.end();
+console.log('Seed data added.');

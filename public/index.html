@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Revibe Salon Automation</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <img src="/brand/revibe-official-logo.png" alt="Revibe official logo" class="brand-logo" />
+        <nav class="nav">
+          <button class="nav-button active" data-screen="entry">Visit Entry</button>
+          <button class="nav-button owner-only" data-screen="dashboard">Owner</button>
+          <button class="nav-button owner-only" data-screen="queue">Queue</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">REVIBE SALON</p>
+            <h1>Salon counter</h1>
+          </div>
+          <div class="auth-panel">
+            <select id="roleSelect">
+              <option value="staff">Staff</option>
+              <option value="owner">Owner</option>
+              <option value="developer">Developer</option>
+            </select>
+            <input id="pinInput" type="password" placeholder="PIN" />
+            <button id="loginButton">Login</button>
+          </div>
+        </header>
+
+        <section id="statusBanner" class="status">Login with staff PIN to start.</section>
+
+        <section id="entryScreen" class="screen active">
+          <form id="visitForm" class="card entry-card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">FAST ENTRY</p>
+                <h2>New visit</h2>
+              </div>
+              <span class="badge">Enter once</span>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Customer name
+                <input name="name" autocomplete="name" placeholder="Customer name" required />
+              </label>
+              <label>
+                Phone number
+                <input name="phone" autocomplete="tel" placeholder="+91..." required />
+              </label>
+              <label>
+                Preferred staff
+                <select name="staffId" id="staffSelect" required></select>
+              </label>
+              <label>
+                Preferred service
+                <select name="serviceId" id="serviceSelect" required></select>
+              </label>
+              <label>
+                Date of visit
+                <input name="visitDate" type="datetime-local" id="visitDate" />
+              </label>
+              <label>
+                Amount paid
+                <input name="amountPaid" id="amountPaid" type="number" min="0" step="0.01" required />
+              </label>
+              <label>
+                Payment method
+                <select name="paymentMethod">
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                  <option value="insurance">Insurance</option>
+                </select>
+              </label>
+              <label>
+                Note
+                <input name="notes" placeholder="Optional preference note" />
+              </label>
+            </div>
+
+            <button class="primary-action" type="submit">Enter Visit</button>
+          </form>
+        </section>
+
+        <section id="dashboardScreen" class="screen">
+          <div class="metrics">
+            <article class="card stat">
+              <p>Today's revenue</p>
+              <strong id="todayRevenue">Rs. 0</strong>
+            </article>
+            <article class="card stat">
+              <p>Today's visits</p>
+              <strong id="todayVisits">0</strong>
+            </article>
+            <article class="card stat">
+              <p>Failed receipts</p>
+              <strong id="failedReceipts">0</strong>
+            </article>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Recent transactions</h2>
+              <button id="refreshDashboard" class="ghost">Refresh</button>
+            </div>
+            <div id="recentTransactions" class="table"></div>
+          </div>
+        </section>
+
+        <section id="queueScreen" class="screen">
+          <div class="card">
+            <div class="card-header">
+              <h2>Automation queue</h2>
+              <button id="runAutomation" class="primary-small">Run Now</button>
+            </div>
+            <div id="queueList" class="queue-list"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
