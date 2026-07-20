@@ -307,7 +307,7 @@ app.post('/api/owner/receipts/:id/resend', requireRole('owner'), async (req, res
       `,
       [req.params.id]
     );
-    const processed = await processReceiptQueue(1);
+    const processed = await processReceiptQueue(5);
     res.json({ processed });
   } catch (error) {
     next(error);

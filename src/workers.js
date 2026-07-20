@@ -43,7 +43,11 @@ export async function processReceiptQueue(limit = 10) {
     try {
       const image = await generateReceiptImage(receipt);
       const fullImageUrl = absoluteUrl(image.imageUrl);
-      await sendWhatsAppImage({
+      const textResult = await sendWhatsAppText({
+        phone: receipt.phone,
+        body: `Hi ${receipt.customer_name}, your Revibe receipt ${receipt.receipt_number} is ready. Sending the receipt photo now.`
+      });
+      const imageResult = await sendWhatsAppImage({
         phone: receipt.phone,
         imageUrl: fullImageUrl,
         caption: `Revibe receipt ${receipt.receipt_number}`
@@ -52,10 +56,24 @@ export async function processReceiptQueue(limit = 10) {
       await query(
         `
         UPDATE receipts
-        SET status = $1, image_path = $2, image_url = $3, sent_at = NOW(), last_error = NULL
-        WHERE id = $4
+        SET
+          status = $1,
+          image_path = $2,
+          image_url = $3,
+          text_message_id = $4,
+          image_message_id = $5,
+          sent_at = NOW(),
+          last_error = NULL
+        WHERE id = $6
         `,
-        [process.env.WHATSAPP_ENABLED === 'true' ? 'sent' : 'queued', image.imagePath, image.imageUrl, receipt.id]
+        [
+          process.env.WHATSAPP_ENABLED === 'true' ? 'sent' : 'queued',
+          image.imagePath,
+          image.imageUrl,
+          textResult.providerMessageId,
+          imageResult.providerMessageId,
+          receipt.id
+        ]
       );
     } catch (error) {
       await query(

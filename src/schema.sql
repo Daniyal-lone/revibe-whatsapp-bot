@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS receipts (
   pdf_path TEXT,
   delivery_channel TEXT NOT NULL DEFAULT 'whatsapp',
   status receipt_status NOT NULL DEFAULT 'pending',
+  text_message_id TEXT,
+  image_message_id TEXT,
   retry_count INTEGER NOT NULL DEFAULT 0,
   max_retries INTEGER NOT NULL DEFAULT 5,
   last_error TEXT,
@@ -211,6 +213,12 @@ ALTER TABLE transactions
 
 ALTER TABLE transactions
   ADD COLUMN IF NOT EXISTS void_reason TEXT;
+
+ALTER TABLE receipts
+  ADD COLUMN IF NOT EXISTS text_message_id TEXT;
+
+ALTER TABLE receipts
+  ADD COLUMN IF NOT EXISTS image_message_id TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_session ON transactions(daily_session_id, is_void);
 

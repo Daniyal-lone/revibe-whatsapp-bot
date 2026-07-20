@@ -54,34 +54,39 @@ function serviceLabel(service) {
   return `${service.category || 'Service'} - ${service.name} - ${money(service.price)}`;
 }
 
-function renderServiceOptions(search = '') {
-  const q = search.trim().toLowerCase();
-  const matches = state.services
+function serviceMatches(search = '') {
+  const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return state.services
     .filter((service) => {
       const haystack = `${service.name} ${service.category} ${service.price}`.toLowerCase();
-      return !q || haystack.includes(q);
+      return tokens.every((token) => haystack.includes(token));
     })
-    .slice(0, 30);
-
-  serviceOptions.innerHTML = matches
-    .map((service) => `<option value="${serviceLabel(service)}"></option>`)
-    .join('');
+    .slice(0, 20);
 }
 
-function selectServiceFromInput() {
-  const typed = serviceSearch.value.trim();
-  const exact = state.services.find((service) => serviceLabel(service) === typed);
-  const fallback = state.services.find((service) => {
-    const q = typed.toLowerCase();
-    return service.name.toLowerCase().includes(q) || String(service.price) === q;
+function renderServiceOptions(search = '') {
+  const matches = serviceMatches(search);
+  serviceOptions.innerHTML = matches
+    .map((service) => `
+      <button class="service-option" type="button" data-service-id="${service.id}">
+        <strong>${service.name}</strong>
+        <span>${service.category || 'Service'} | ${money(service.price)}</span>
+      </button>
+    `)
+    .join('') || '<div class="muted">No matching service.</div>';
+  serviceOptions.classList.toggle('open', Boolean(search.trim()));
+
+  document.querySelectorAll('[data-service-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const selected = state.services.find((service) => service.id === button.dataset.serviceId);
+      selectService(selected);
+      serviceOptions.classList.remove('open');
+    });
   });
-  const selected = exact || fallback;
+}
 
-  if (!selected) {
-    serviceId.value = '';
-    return;
-  }
-
+function selectService(selected) {
+  if (!selected) return;
   state.selectedServiceId = selected.id;
   serviceId.value = selected.id;
   serviceSearch.value = serviceLabel(selected);
@@ -95,9 +100,7 @@ function renderBootstrap() {
 
   renderServiceOptions();
   if (state.services[0]) {
-    serviceSearch.value = serviceLabel(state.services[0]);
-    serviceId.value = state.services[0].id;
-    amountPaid.value = state.services[0].price;
+    selectService(state.services[0]);
   }
 }
 
@@ -127,6 +130,9 @@ document.querySelector('#loginButton').addEventListener('click', async () => {
     localStorage.setItem('revibe_token', state.token);
     localStorage.setItem('revibe_role', state.role);
     await loadBootstrap();
+    if (['owner', 'developer'].includes(state.role)) {
+      await showScreen('dashboard');
+    }
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -146,31 +152,40 @@ document.querySelector('#logoutButton').addEventListener('click', () => {
 document.querySelectorAll('.nav-button').forEach((button) => {
   button.addEventListener('click', async () => {
     if (button.classList.contains('owner-only') && !['owner', 'developer'].includes(state.role)) return;
-
-    document.querySelectorAll('.nav-button').forEach((item) => item.classList.remove('active'));
-    button.classList.add('active');
-    document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('active'));
-    document.querySelector(`#${button.dataset.screen}Screen`).classList.add('active');
-    if (button.dataset.screen === 'previous') await loadPrevious();
-    if (button.dataset.screen === 'dashboard') {
-      await loadDashboard();
-      await loadTransactions();
-    }
-    if (button.dataset.screen === 'queue') await loadQueue();
+    await showScreen(button.dataset.screen);
   });
 });
 
+async function showScreen(screenName) {
+  document.querySelectorAll('.nav-button').forEach((item) => {
+    item.classList.toggle('active', item.dataset.screen === screenName);
+  });
+  document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('active'));
+  document.querySelector(`#${screenName}Screen`).classList.add('active');
+  if (screenName === 'previous') await loadPrevious();
+  if (screenName === 'dashboard') {
+    await loadDashboard();
+    await loadTransactions();
+  }
+  if (screenName === 'queue') await loadQueue();
+}
+
 serviceSearch.addEventListener('input', () => {
   renderServiceOptions(serviceSearch.value);
-  selectServiceFromInput();
+  serviceId.value = '';
 });
 
-serviceSearch.addEventListener('change', selectServiceFromInput);
+serviceSearch.addEventListener('focus', () => renderServiceOptions(serviceSearch.value));
+
+document.addEventListener('click', (event) => {
+  if (!serviceOptions.contains(event.target) && event.target !== serviceSearch) {
+    serviceOptions.classList.remove('open');
+  }
+});
 
 visitForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    selectServiceFromInput();
     if (!serviceId.value) throw new Error('Select a valid service.');
 
     const form = new FormData(visitForm);
@@ -283,9 +298,20 @@ async function loadQueue() {
           <strong>${row.type}: ${row.name || row.receipt_number || row.id}</strong>
           <p class="muted">Status: ${row.status} | Retries: ${row.retry_count}</p>
           ${row.last_error ? `<p class="muted">${row.last_error}</p>` : ''}
+          ${row.type === 'Receipt' ? `<button class="ghost resend-button" data-receipt-id="${row.id}">Resend</button>` : ''}
         </div>
       `)
       .join('') || '<p class="muted">Queue is clear.</p>';
+
+    document.querySelectorAll('[data-receipt-id]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        await api(`/api/owner/receipts/${button.dataset.receiptId}/resend`, {
+          method: 'POST',
+          body: '{}'
+        });
+        await loadQueue();
+      });
+    });
   } catch (error) {
     setStatus(error.message, true);
   }
