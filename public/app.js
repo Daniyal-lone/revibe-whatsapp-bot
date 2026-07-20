@@ -2,13 +2,16 @@ const state = {
   token: localStorage.getItem('revibe_token'),
   role: localStorage.getItem('revibe_role') || 'staff',
   staff: [],
-  services: []
+  services: [],
+  selectedServiceId: ''
 };
 
 const statusBanner = document.querySelector('#statusBanner');
 const visitForm = document.querySelector('#visitForm');
 const staffSelect = document.querySelector('#staffSelect');
-const serviceSelect = document.querySelector('#serviceSelect');
+const serviceSearch = document.querySelector('#serviceSearch');
+const serviceOptions = document.querySelector('#serviceOptions');
+const serviceId = document.querySelector('#serviceId');
 const amountPaid = document.querySelector('#amountPaid');
 const visitDate = document.querySelector('#visitDate');
 
@@ -47,16 +50,55 @@ function setToday() {
   visitDate.value = now.toISOString().slice(0, 16);
 }
 
+function serviceLabel(service) {
+  return `${service.category || 'Service'} - ${service.name} - ${money(service.price)}`;
+}
+
+function renderServiceOptions(search = '') {
+  const q = search.trim().toLowerCase();
+  const matches = state.services
+    .filter((service) => {
+      const haystack = `${service.name} ${service.category} ${service.price}`.toLowerCase();
+      return !q || haystack.includes(q);
+    })
+    .slice(0, 30);
+
+  serviceOptions.innerHTML = matches
+    .map((service) => `<option value="${serviceLabel(service)}"></option>`)
+    .join('');
+}
+
+function selectServiceFromInput() {
+  const typed = serviceSearch.value.trim();
+  const exact = state.services.find((service) => serviceLabel(service) === typed);
+  const fallback = state.services.find((service) => {
+    const q = typed.toLowerCase();
+    return service.name.toLowerCase().includes(q) || String(service.price) === q;
+  });
+  const selected = exact || fallback;
+
+  if (!selected) {
+    serviceId.value = '';
+    return;
+  }
+
+  state.selectedServiceId = selected.id;
+  serviceId.value = selected.id;
+  serviceSearch.value = serviceLabel(selected);
+  amountPaid.value = selected.price;
+}
+
 function renderBootstrap() {
   staffSelect.innerHTML = state.staff
     .map((person) => `<option value="${person.id}">${person.name} - ${person.role}</option>`)
     .join('');
 
-  serviceSelect.innerHTML = state.services
-    .map((service) => `<option value="${service.id}" data-price="${service.price}">${service.name} - ${money(service.price)}</option>`)
-    .join('');
-
-  amountPaid.value = serviceSelect.selectedOptions[0]?.dataset.price || '';
+  renderServiceOptions();
+  if (state.services[0]) {
+    serviceSearch.value = serviceLabel(state.services[0]);
+    serviceId.value = state.services[0].id;
+    amountPaid.value = state.services[0].price;
+  }
 }
 
 async function loadBootstrap() {
@@ -69,6 +111,7 @@ async function loadBootstrap() {
     el.style.display = ['owner', 'developer'].includes(state.role) ? '' : 'none';
   });
   setStatus(`Logged in as ${state.role}. Ready.`);
+  await loadPrevious();
 }
 
 document.querySelector('#loginButton').addEventListener('click', async () => {
@@ -89,26 +132,51 @@ document.querySelector('#loginButton').addEventListener('click', async () => {
   }
 });
 
+document.querySelector('#logoutButton').addEventListener('click', () => {
+  localStorage.removeItem('revibe_token');
+  localStorage.removeItem('revibe_role');
+  state.token = null;
+  state.role = 'staff';
+  document.querySelectorAll('.owner-only').forEach((el) => {
+    el.style.display = 'none';
+  });
+  setStatus('Logged out. Enter PIN to continue.');
+});
+
 document.querySelectorAll('.nav-button').forEach((button) => {
   button.addEventListener('click', async () => {
+    if (button.classList.contains('owner-only') && !['owner', 'developer'].includes(state.role)) return;
+
     document.querySelectorAll('.nav-button').forEach((item) => item.classList.remove('active'));
     button.classList.add('active');
     document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('active'));
     document.querySelector(`#${button.dataset.screen}Screen`).classList.add('active');
-    if (button.dataset.screen === 'dashboard') await loadDashboard();
+    if (button.dataset.screen === 'previous') await loadPrevious();
+    if (button.dataset.screen === 'dashboard') {
+      await loadDashboard();
+      await loadTransactions();
+    }
     if (button.dataset.screen === 'queue') await loadQueue();
   });
 });
 
-serviceSelect.addEventListener('change', () => {
-  amountPaid.value = serviceSelect.selectedOptions[0]?.dataset.price || '';
+serviceSearch.addEventListener('input', () => {
+  renderServiceOptions(serviceSearch.value);
+  selectServiceFromInput();
 });
+
+serviceSearch.addEventListener('change', selectServiceFromInput);
 
 visitForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
+    selectServiceFromInput();
+    if (!serviceId.value) throw new Error('Select a valid service.');
+
     const form = new FormData(visitForm);
     const payload = Object.fromEntries(form.entries());
+    payload.phone = payload.phone.replace(/\D/g, '');
+
     const data = await api('/api/visits', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -116,11 +184,32 @@ visitForm.addEventListener('submit', async (event) => {
     visitForm.reset();
     setToday();
     renderBootstrap();
+    await loadPrevious();
     setStatus(`${data.message} Receipt: ${data.receiptNumber}`);
   } catch (error) {
     setStatus(error.message, true);
   }
 });
+
+async function loadPrevious() {
+  if (!state.token) return;
+  try {
+    const rows = await api('/api/staff/recent');
+    document.querySelector('#previousEntries').innerHTML = rows
+      .map((row) => `
+        <div class="row">
+          <strong>${row.customer_name}</strong>
+          <span>${row.service_name}</span>
+          <span>${row.staff_name}</span>
+          <span>${money(row.amount_paid)}</span>
+          <span class="pill">${row.receipt_status || 'pending'}</span>
+        </div>
+      `)
+      .join('') || '<p class="muted">No entries today.</p>';
+  } catch {
+    // Staff can still enter visits even if this small panel fails.
+  }
+}
 
 async function loadDashboard() {
   try {
@@ -128,6 +217,10 @@ async function loadDashboard() {
     document.querySelector('#todayRevenue').textContent = money(data.today.revenue);
     document.querySelector('#todayVisits').textContent = data.today.visits;
     document.querySelector('#failedReceipts').textContent = data.failedReceipts;
+    document.querySelector('#yesterdayRevenue').textContent = money(data.yesterday.revenue);
+    document.querySelector('#sessionStatus').textContent = data.session
+      ? `Session ${data.session.status} | Visits ${data.session.total_visits} | Revenue ${money(data.session.total_revenue)}`
+      : 'No session opened today.';
     document.querySelector('#recentTransactions').innerHTML = data.recentTransactions
       .map((row) => `
         <div class="row">
@@ -135,9 +228,42 @@ async function loadDashboard() {
           <span>${row.service_name}</span>
           <span>${row.staff_name}</span>
           <span>${money(row.amount_paid)}</span>
+          <span class="pill">${row.is_void ? 'void' : row.receipt_status || 'pending'}</span>
         </div>
       `)
       .join('') || '<p class="muted">No transactions yet.</p>';
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function loadTransactions() {
+  try {
+    const rows = await api('/api/owner/transactions?days=14');
+    document.querySelector('#transactionHistory').innerHTML = rows
+      .map((row) => `
+        <div class="row">
+          <strong>${row.customer_name}<br><span class="muted">${row.phone}</span></strong>
+          <span>${row.service_name}</span>
+          <span>${row.staff_name}</span>
+          <span>${money(row.amount_paid)}</span>
+          <button class="danger" data-void="${row.id}" ${row.is_void ? 'disabled' : ''}>${row.is_void ? 'Voided' : 'Void'}</button>
+        </div>
+      `)
+      .join('') || '<p class="muted">No transactions found.</p>';
+
+    document.querySelectorAll('[data-void]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const reason = prompt('Reason for voiding this transaction?', 'Test or wrong entry');
+        if (!reason) return;
+        await api(`/api/owner/transactions/${button.dataset.void}/void`, {
+          method: 'POST',
+          body: JSON.stringify({ reason })
+        });
+        await loadDashboard();
+        await loadTransactions();
+      });
+    });
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -166,6 +292,18 @@ async function loadQueue() {
 }
 
 document.querySelector('#refreshDashboard').addEventListener('click', loadDashboard);
+document.querySelector('#refreshTransactions').addEventListener('click', loadTransactions);
+document.querySelector('#refreshPrevious').addEventListener('click', loadPrevious);
+document.querySelector('#closeSession').addEventListener('click', async () => {
+  try {
+    await api('/api/owner/session/close', { method: 'POST', body: '{}' });
+    await loadDashboard();
+    setStatus('Day session closed.');
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
 document.querySelector('#runAutomation').addEventListener('click', async () => {
   try {
     const result = await api('/api/owner/run-automation', { method: 'POST', body: '{}' });

@@ -15,6 +15,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  CREATE TYPE session_status AS ENUM ('open', 'closed');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -60,6 +65,24 @@ CREATE TABLE IF NOT EXISTS business_settings (
   CONSTRAINT single_business_settings CHECK (id = TRUE)
 );
 
+CREATE TABLE IF NOT EXISTS daily_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_date DATE NOT NULL UNIQUE,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  opened_by_role user_role NOT NULL DEFAULT 'staff',
+  closed_at TIMESTAMPTZ,
+  closed_by_role user_role,
+  status session_status NOT NULL DEFAULT 'open',
+  total_visits INTEGER NOT NULL DEFAULT 0,
+  total_revenue NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  cash_revenue NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  upi_revenue NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  card_revenue NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  insurance_revenue NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 DO $$ BEGIN
   ALTER TABLE customers
     ADD CONSTRAINT fk_customers_preferred_staff
@@ -77,6 +100,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   transaction_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  daily_session_id UUID REFERENCES daily_sessions(id),
   customer_id UUID NOT NULL REFERENCES customers(id),
   customer_name_snapshot TEXT,
   customer_phone_snapshot TEXT,
@@ -85,6 +109,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   amount_paid NUMERIC(10, 2) NOT NULL CHECK (amount_paid >= 0),
   payment_method TEXT NOT NULL DEFAULT 'cash',
   payment_status TEXT NOT NULL DEFAULT 'paid',
+  is_void BOOLEAN NOT NULL DEFAULT FALSE,
+  voided_at TIMESTAMPTZ,
+  voided_by_role user_role,
+  void_reason TEXT,
   external_payment_reference TEXT UNIQUE,
   source TEXT NOT NULL DEFAULT 'staff_entry',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -169,6 +197,23 @@ ALTER TABLE transactions
 ALTER TABLE transactions
   ADD COLUMN IF NOT EXISTS customer_phone_snapshot TEXT;
 
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS daily_session_id UUID REFERENCES daily_sessions(id);
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS is_void BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ;
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS voided_by_role user_role;
+
+ALTER TABLE transactions
+  ADD COLUMN IF NOT EXISTS void_reason TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_transactions_session ON transactions(daily_session_id, is_void);
+
 UPDATE transactions t
 SET
   customer_name_snapshot = COALESCE(t.customer_name_snapshot, c.name),
@@ -176,3 +221,38 @@ SET
 FROM customers c
 WHERE c.id = t.customer_id
   AND (t.customer_name_snapshot IS NULL OR t.customer_phone_snapshot IS NULL);
+
+INSERT INTO daily_sessions (business_date, opened_by_role, status)
+SELECT DISTINCT transaction_date::date, 'developer'::user_role, 'closed'::session_status
+FROM transactions
+ON CONFLICT (business_date) DO NOTHING;
+
+UPDATE transactions t
+SET daily_session_id = ds.id
+FROM daily_sessions ds
+WHERE ds.business_date = t.transaction_date::date
+  AND t.daily_session_id IS NULL;
+
+UPDATE daily_sessions ds
+SET
+  total_visits = totals.total_visits,
+  total_revenue = totals.total_revenue,
+  cash_revenue = totals.cash_revenue,
+  upi_revenue = totals.upi_revenue,
+  card_revenue = totals.card_revenue,
+  insurance_revenue = totals.insurance_revenue,
+  updated_at = NOW()
+FROM (
+  SELECT
+    daily_session_id,
+    COUNT(*) FILTER (WHERE is_void = FALSE)::int AS total_visits,
+    COALESCE(SUM(amount_paid) FILTER (WHERE is_void = FALSE), 0) AS total_revenue,
+    COALESCE(SUM(amount_paid) FILTER (WHERE is_void = FALSE AND payment_method = 'cash'), 0) AS cash_revenue,
+    COALESCE(SUM(amount_paid) FILTER (WHERE is_void = FALSE AND payment_method = 'upi'), 0) AS upi_revenue,
+    COALESCE(SUM(amount_paid) FILTER (WHERE is_void = FALSE AND payment_method = 'card'), 0) AS card_revenue,
+    COALESCE(SUM(amount_paid) FILTER (WHERE is_void = FALSE AND payment_method = 'insurance'), 0) AS insurance_revenue
+  FROM transactions
+  WHERE daily_session_id IS NOT NULL
+  GROUP BY daily_session_id
+) totals
+WHERE totals.daily_session_id = ds.id;

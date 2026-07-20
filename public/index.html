@@ -12,6 +12,7 @@
         <img src="/brand/revibe-official-logo.png" alt="Revibe official logo" class="brand-logo" />
         <nav class="nav">
           <button class="nav-button active" data-screen="entry">Visit Entry</button>
+          <button class="nav-button" data-screen="previous">Previous</button>
           <button class="nav-button owner-only" data-screen="dashboard">Owner</button>
           <button class="nav-button owner-only" data-screen="queue">Queue</button>
         </nav>
@@ -31,6 +32,7 @@
             </select>
             <input id="pinInput" type="password" placeholder="PIN" />
             <button id="loginButton">Login</button>
+            <button id="logoutButton" class="ghost" type="button">Logout</button>
           </div>
         </header>
 
@@ -53,7 +55,10 @@
               </label>
               <label>
                 Phone number
-                <input name="phone" autocomplete="tel" placeholder="+91..." required />
+                <div class="phone-input">
+                  <span>+91</span>
+                  <input name="phone" autocomplete="tel" inputmode="numeric" maxlength="10" placeholder="10 digit number" required />
+                </div>
               </label>
               <label>
                 Preferred staff
@@ -61,7 +66,9 @@
               </label>
               <label>
                 Preferred service
-                <select name="serviceId" id="serviceSelect" required></select>
+                <input id="serviceSearch" list="serviceOptions" placeholder="Search service or price" required />
+                <datalist id="serviceOptions"></datalist>
+                <input type="hidden" name="serviceId" id="serviceId" />
               </label>
               <label>
                 Date of visit
@@ -90,6 +97,16 @@
           </form>
         </section>
 
+        <section id="previousScreen" class="screen">
+          <div class="card">
+            <div class="card-header">
+              <h2>Today's previous entries</h2>
+              <button id="refreshPrevious" class="ghost">Refresh</button>
+            </div>
+            <div id="previousEntries" class="table"></div>
+          </div>
+        </section>
+
         <section id="dashboardScreen" class="screen">
           <div class="metrics">
             <article class="card stat">
@@ -104,14 +121,32 @@
               <p>Failed receipts</p>
               <strong id="failedReceipts">0</strong>
             </article>
+            <article class="card stat">
+              <p>Yesterday revenue</p>
+              <strong id="yesterdayRevenue">Rs. 0</strong>
+            </article>
           </div>
 
           <div class="card">
             <div class="card-header">
-              <h2>Recent transactions</h2>
-              <button id="refreshDashboard" class="ghost">Refresh</button>
+              <div>
+                <h2>Owner counter</h2>
+                <p id="sessionStatus" class="muted">Session loading...</p>
+              </div>
+              <div class="button-row">
+                <button id="closeSession" class="ghost">Close Day</button>
+                <button id="refreshDashboard" class="ghost">Refresh</button>
+              </div>
             </div>
             <div id="recentTransactions" class="table"></div>
+          </div>
+
+          <div class="card space-top">
+            <div class="card-header">
+              <h2>Transaction history</h2>
+              <button id="refreshTransactions" class="ghost">Refresh</button>
+            </div>
+            <div id="transactionHistory" class="table"></div>
           </div>
         </section>
 

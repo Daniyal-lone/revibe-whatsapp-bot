@@ -1,6 +1,7 @@
 import { query, withTransaction } from './db.js';
 import { normalizePhoneForIndia } from './phone.js';
 import { generateReceiptImage } from './receipt.js';
+import { ensureDailySession, recalculateDailySession } from './sessions.js';
 import { sendWhatsAppImage, sendWhatsAppText } from './whatsapp.js';
 
 function absoluteUrl(relativeUrl) {
@@ -118,7 +119,10 @@ export async function enqueueDueReturnReminders() {
       WHERE p.repeat_visit_count >= 2
         AND c.whatsapp_opt_in = TRUE
         AND c.marketing_opt_out = FALSE
-        AND CURRENT_DATE >= l.last_visit_date + p.avg_days_between_visits
+        AND CURRENT_DATE >= GREATEST(
+          l.last_visit_date + p.avg_days_between_visits,
+          l.last_visit_date + 7
+        )
     )
     INSERT INTO marketing_messages (customer_id, due_date, message_body)
     SELECT
@@ -186,6 +190,7 @@ export async function createVisit(payload, actorRole = 'staff') {
   }
 
   return withTransaction(async (client) => {
+    const session = await ensureDailySession(client, actorRole);
     const customerResult = await client.query(
       `
       INSERT INTO customers (name, phone, preferred_staff_id, preferred_service_id, notes)
@@ -206,6 +211,7 @@ export async function createVisit(payload, actorRole = 'staff') {
     const transactionResult = await client.query(
       `
       INSERT INTO transactions (
+        daily_session_id,
         customer_id,
         customer_name_snapshot,
         customer_phone_snapshot,
@@ -215,10 +221,11 @@ export async function createVisit(payload, actorRole = 'staff') {
         payment_method,
         transaction_date
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, NOW()))
       RETURNING *
       `,
       [
+        session.id,
         customer.id,
         payload.name.trim(),
         cleanPhone,
@@ -271,10 +278,13 @@ export async function createVisit(payload, actorRole = 'staff') {
       [actorRole, transaction.id, JSON.stringify({ receiptNumber })]
     );
 
+    await recalculateDailySession(client, session.id);
+
     return {
       customer,
       transaction,
-      receipt: receiptResult.rows[0]
+      receipt: receiptResult.rows[0],
+      session
     };
   });
 }
